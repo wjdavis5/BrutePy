@@ -4,9 +4,9 @@ import sys
 import argparse
 
 parser = argparse.ArgumentParser(description='HTTP Auth Brute Force Tool')
-parser.add_argument('Target', metavar='--target', type=str, help='The target URI. ex http://192.168.1.1')
-parser.add_argument('Wordlist', metavar='--words', type=str, help='The wordlist to choose passwords from')
-parser.add_argument('Username', metavar='--user', type=str, help='The username to use')
+parser.add_argument('Target', metavar='t', type=str, help='The target URI. ex http://192.168.1.1')
+parser.add_argument('Wordlist', metavar='w', type=str, help='The wordlist to choose passwords from')
+parser.add_argument('Username', metavar='u', type=str, help='The username to use')
 parser.add_argument("--delay", type=int, help='Time in milliseconds between each request', default=5)
 parser.add_argument("--startat", type=int, help='Start at this line in the file', default=0)
 
@@ -36,4 +36,4 @@ with open(wordlist, "r") as f:
         pwd = f.readline().strip('\n').strip('')
         while not pwd:
             pwd = f.readline().strip('\n')
-        sleep(delay)
+        sleep(delay/1000.0)
