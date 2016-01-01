@@ -32,6 +32,8 @@ with open(wordlist, "r") as f:
         res, content = http.request(target)
         print res.status
         if res.status == 200:
+            print "The password is: "
+            print pwd
             exit()
         pwd = f.readline().strip('\n').strip('')
         while not pwd:
