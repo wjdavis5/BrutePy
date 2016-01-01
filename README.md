@@ -25,12 +25,8 @@ optional arguments:
   --startat STARTAT  Start at this line in the file
 ```
 
-Currently BrutePy targets 192.168.1.1 statically.
 
-Some things I'd like to do:
 
- 1. Implement argparse
- 2. Allow passing in of target
- 3. Allow configurable delay
+
 
 > Written with [StackEdit](https://stackedit.io/).
