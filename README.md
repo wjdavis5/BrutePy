@@ -15,7 +15,7 @@ Currently BrutePy targets 192.168.1.1 statically.
 
 Some things I'd like to do:
 
- 1. Handle arguments better
+ 1. Implement argparse
  2. Allow passing in of target
  3. Allow configurable delay
 
