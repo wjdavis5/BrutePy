@@ -8,6 +8,10 @@ BrutePy is a tool that can be used to Brute Force a target that requires HTTP Au
 **Usage**
 
 ```
+python Brute.py https://192.168.1.1 rockyou.txt admin --delay 3 --startat 5
+```
+
+```
 E:\git\BrutePy>python Brute.py -h
 usage: Brute.py [-h] [--delay DELAY] [--startat STARTAT]
                 [--ignore-consecutive-empty IGNORE_CONSECUTIVE_EMPTY]
