@@ -11,6 +11,7 @@ def signal_handler(signal, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 # PARSING ARGS
+
 parser = argparse.ArgumentParser(description='HTTP Auth Brute Force Tool')
 parser.add_argument('Target', metavar='target', type=str, help='The target URI. ex http://192.168.1.1')
 parser.add_argument('Wordlist', metavar='words', type=str, help='The wordlist to choose passwords from')
@@ -19,6 +20,7 @@ parser.add_argument("--delay", type=int, help='Time in milliseconds between each
 parser.add_argument("--startat", type=int, help='Start at this line in the file', default=0)
 parser.add_argument("--ignore-consecutive-empty", type=int, help='Ignore this many consec. empty lines before exiting',
                     default=4)
+parser.add_argument("--ignore-invalid-certificate", type=bool, help='Ignore untrusted certs', default=True)
 
 args = parser.parse_args()
 # END ARGS
@@ -31,6 +33,7 @@ startAt = args.startat
 count = 0
 maxEmptyCount = args.ignore_consecutive_empty
 currentLine = 0
+ignoreBadCerts = args.ignore_ivalid_certificate
 # END VARS
 
 with open(wordlist, "r") as f:
@@ -45,7 +48,7 @@ with open(wordlist, "r") as f:
         emptyCount = 0
         print pwd
         http = httplib2.Http()
-        http.disable_ssl_certificate_validation = True
+        http.disable_ssl_certificate_validation = ignoreBadCerts
         http.add_credentials(username, pwd)
         res, content = http.request(target)
         print res.status
