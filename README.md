@@ -15,6 +15,7 @@ python Brute.py https://192.168.1.1 rockyou.txt admin --delay 3 --startat 5
 E:\git\BrutePy>python Brute.py -h
 usage: Brute.py [-h] [--delay DELAY] [--startat STARTAT]
                 [--ignore-consecutive-empty IGNORE_CONSECUTIVE_EMPTY]
+                [--ignore-invalid-certificate IGNORE_INVALID_CERTIFICATE]
                 target words user
 
 HTTP Auth Brute Force Tool
@@ -30,6 +31,9 @@ optional arguments:
   --startat STARTAT     Start at this line in the file
   --ignore-consecutive-empty IGNORE_CONSECUTIVE_EMPTY
                         Ignore this many consec. empty lines before exiting
+  --ignore-invalid-certificate IGNORE_INVALID_CERTIFICATE
+                        Ignore untrusted certs
+
 
 ```
 
