@@ -38,7 +38,7 @@ with open(wordlist, "r") as f:
     if startAt > 0:
         print "Skipping: " + str(startAt)
         while count < startAt:
-            pwd = f.readline().strip('\n')
+            pwd = f.readline().rstrip('\n')
             count += 1
     while pwd:
         currentLine += 1
@@ -53,12 +53,12 @@ with open(wordlist, "r") as f:
             print "The password is: "
             print pwd
             exit()
-        pwd = f.readline().strip('\n').strip('')
+        pwd = f.readline().rstrip('\n')
         while not pwd:
             emptyCount += 1
             if emptyCount > maxEmptyCount:
                 exit()
-            pwd = f.readline().strip('\n')
+            pwd = f.readline().rstrip('\n')
         sleep(delay / 1000.0)
 
 
