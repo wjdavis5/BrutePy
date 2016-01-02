@@ -50,14 +50,14 @@ with open(wordlist, "r") as f:
         res, content = http.request(target)
         print res.status
         if res.status == 200:
-            print "The password is: "
-            print pwd
-            exit()
+            print "The password is: " + pwd
+            print "At line" + str(currentLine)
+            sys.exit(0)
         pwd = f.readline().rstrip('\n')
         while not pwd:
             emptyCount += 1
             if emptyCount > maxEmptyCount:
-                exit()
+                sys.exit(0)
             pwd = f.readline().rstrip('\n')
         sleep(delay / 1000.0)
 
