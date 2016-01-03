@@ -5,6 +5,7 @@ import argparse
 import signal
 
 
+# Print the current line on when terminated via ctrl-c
 def signal_handler(signal, frame):
     print 'Stopped at line: ' + str(currentLine)
     sys.exit(0)
@@ -24,6 +25,7 @@ parser.add_argument("--ignore-invalid-certificate", type=bool, help='Ignore untr
 
 args = parser.parse_args()
 # END ARGS
+
 # GLOBAL VARS
 delay = args.delay
 target = args.Target
@@ -33,7 +35,7 @@ startAt = args.startat
 count = 0
 maxEmptyCount = args.ignore_consecutive_empty
 currentLine = 0
-ignoreBadCerts = args.ignore_ivalid_certificate
+ignoreBadCerts = args.ignore_invalid_certificate
 # END VARS
 
 with open(wordlist, "r") as f:
