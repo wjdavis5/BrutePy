@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from time import sleep
 import httplib2
 import sys
