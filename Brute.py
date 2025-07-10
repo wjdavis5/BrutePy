@@ -91,13 +91,14 @@ numThreads = args.threads
 verbose = args.verbose
 outputFile = args.output
 found_password = False
+connection_failed = False
 password_queue = queue.Queue()
 results_lock = threading.Lock()
 # END VARS
 
 def test_password(pwd, line_number):
     """Test a single password"""
-    global found_password
+    global found_password, connection_failed
     
     if found_password:
         return
@@ -144,7 +145,12 @@ def test_password(pwd, line_number):
                     print(f"Unexpected response: {response.status_code}")
                     
     except requests.exceptions.ConnectionError as e:
-        print(f"Error: Connection failed - {e}")
+        with results_lock:
+            print(f"Error: Connection failed - {e}")
+            connection_failed = True
+            # If this is early in the scan, it's likely the target is unreachable
+            if line_number <= 2:
+                found_password = True  # Signal other threads to stop
         return False
     except requests.exceptions.Timeout:
         if verbose:
@@ -215,6 +221,13 @@ try:
             # Only queue non-empty passwords
             if pwd.strip():
                 password_queue.put((pwd, currentLine))
+                
+                # Check if we should stop early due to connection failures
+                if currentLine >= 2:  # Check after just 2 attempts
+                    sleep(0.05)  # Give threads time to process
+                    if found_password:  # Will be set to True if connection fails early
+                        print("\nStopping scan due to connection failures.")
+                        break
             
             pwd = f.readline().rstrip('\n')
             
@@ -240,11 +253,17 @@ try:
         t.join(timeout=1)
     
     if found_password:
-        print("\nPassword found! Exiting.")
-        sys.exit(0)
+        # Check if we found a password or just stopped due to connection failure
+        if connection_failed:
+            print("\nScan stopped due to connection failure.")
+            sys.exit(1)
+        else:
+            print("\nPassword found! Exiting.")
+            sys.exit(0)
     else:
         print(f"\nScan completed. Tried {currentLine} passwords.")
         print("No valid credentials found.")
+        sys.exit(1)  # Exit with error code when no credentials found
 
 except FileNotFoundError:
     print(f"Error: Wordlist file '{wordlist}' not found")
