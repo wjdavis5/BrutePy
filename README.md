@@ -51,7 +51,7 @@ python Brute.py https://target.com/admin wordlist.txt admin \
 usage: Brute.py [-h] [--delay DELAY] [--startat STARTAT] 
                 [--ignore-consecutive-empty IGNORE_CONSECUTIVE_EMPTY]
                 [--threads THREADS] [--verbose] [--output OUTPUT] 
-                [--ignore-invalid-certificate]
+                [--ignore-invalid-certificate] [--max-retries MAX_RETRIES]
                 target words user
 
 HTTP Auth Brute Force Tool
@@ -73,6 +73,8 @@ optional arguments:
                         Output results to file
   --ignore-invalid-certificate
                         Ignore untrusted SSL certificates
+  --max-retries MAX_RETRIES
+                        Maximum retries for 429 rate limit responses (default: 3)
 ```
 
 ## Examples
@@ -100,6 +102,50 @@ python Brute.py https://192.168.1.1:8443/admin wordlist.txt admin \
     --output scan_results.txt
 ```
 
+### Scan with custom rate limit retry settings
+```bash
+python Brute.py https://example.com/admin rockyou.txt admin \
+    --threads 5 \
+    --max-retries 5 \
+    --delay 500 \
+    --verbose
+```
+
+## Rate Limiting and 429 Response Handling
+
+BrutePy now includes intelligent handling of HTTP 429 (Too Many Requests) responses:
+
+### Automatic Retry Logic
+- **Exponential Backoff**: If no `Retry-After` header is present, uses 1s, 2s, 4s, 8s delays
+- **Retry-After Header**: Respects server-specified retry delays when provided
+- **Configurable Retries**: Use `--max-retries` to set retry limit (0-10, default: 3)
+- **Thread-Safe**: Each thread handles its own retries without blocking others
+
+### Example Rate Limit Handling
+```
+Trying: admin:[REDACTED] (line 150) -> 429
+Rate limited (429). Server requests waiting 5.0s (Retry-After header)
+Retrying in 5.0 seconds... (attempt 1/3)
+Trying: admin:[REDACTED] (line 150) (attempt 2/4) -> 200
+[SUCCESS] Authentication successful!
+```
+
+### Best Practices for Rate-Limited Targets
+```bash
+# Conservative approach for heavily rate-limited targets
+python Brute.py https://example.com/admin wordlist.txt admin \
+    --threads 1 \
+    --delay 2000 \
+    --max-retries 5 \
+    --verbose
+
+# Balanced approach for moderate rate limiting
+python Brute.py https://example.com/admin wordlist.txt admin \
+    --threads 3 \
+    --delay 1000 \
+    --max-retries 3
+```
+
 ## Security Considerations
 
 - **Responsible Use**: Only use this tool against systems you own or have explicit permission to test
@@ -120,6 +166,7 @@ python Brute.py https://192.168.1.1:8443/admin wordlist.txt admin \
 - **Verbose Mode**: Detailed logging with `--verbose` flag
 - **Input Validation**: Validates URLs, files, and parameter ranges
 - **Graceful Interruption**: Proper handling of Ctrl+C and cleanup
+- **Rate Limit Handling**: Intelligent 429 response handling with exponential backoff and Retry-After header support
 
 ## Wordlists
 

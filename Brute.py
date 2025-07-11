@@ -31,6 +31,7 @@ parser.add_argument("--threads", type=int, help='Number of concurrent threads (d
 parser.add_argument("--verbose", "-v", action="store_true", help='Enable verbose output')
 parser.add_argument("--output", "-o", type=str, help='Output results to file')
 parser.add_argument("--ignore-invalid-certificate", action="store_true", help='Ignore untrusted certs', default=False)
+parser.add_argument("--max-retries", type=int, help='Maximum retries for 429 rate limit responses (default: 3)', default=3)
 
 args = parser.parse_args()
 
@@ -73,6 +74,11 @@ def validate_inputs():
     if args.threads < 1 or args.threads > 50:
         print("Error: Number of threads must be between 1 and 50")
         sys.exit(1)
+    
+    # Validate max retries
+    if args.max_retries < 0 or args.max_retries > 10:
+        print("Error: Max retries must be between 0 and 10")
+        sys.exit(1)
 
 validate_inputs()
 # END ARGS
@@ -90,6 +96,7 @@ ignoreBadCerts = args.ignore_invalid_certificate
 numThreads = args.threads
 verbose = args.verbose
 outputFile = args.output
+maxRetries = args.max_retries
 found_password = False
 connection_failed = False
 password_queue = queue.Queue()
@@ -97,72 +104,119 @@ results_lock = threading.Lock()
 # END VARS
 
 def test_password(pwd, line_number):
-    """Test a single password"""
+    """Test a single password with retry logic for 429 responses"""
     global found_password, connection_failed
     
     if found_password:
         return
     
-    try:
-        # Configure SSL verification
-        verify_ssl = not ignoreBadCerts
-        
-        # Make HTTP request with basic auth
-        response = requests.get(
-            target,
-            auth=(username, pwd),
-            verify=verify_ssl,
-            timeout=10,  # 10 second timeout
-            headers={'User-Agent': 'BrutePy/1.0'}
-        )
-        
-        with results_lock:
-            if found_password:
-                return
-                
-            if verbose:
-                print(f"Trying: {username}:[REDACTED] (line {line_number}) -> {response.status_code}")
-            elif line_number % 10 == 0:  # Progress every 10 attempts
-                print(f"Progress: tested {line_number} passwords...")
+    base_backoff = 1.0  # Base backoff time in seconds
+    
+    for attempt in range(maxRetries + 1):
+        try:
+            # Configure SSL verification
+            verify_ssl = not ignoreBadCerts
             
-            if response.status_code == 200:
-                found_password = True
-                print(f"\n[SUCCESS] Authentication successful!")
-                print(f"Username: {username}")
-                print(f"Password found at line: {line_number}")
-                if outputFile:
-                    with open(outputFile, 'a') as f:
-                        f.write(f"SUCCESS: {target} - {username}:{pwd} (line {line_number})\n")
-                return True
-            elif response.status_code == 401:
-                if verbose:
-                    print("Authentication failed (401 Unauthorized)")
-            elif response.status_code == 403:
-                if verbose:
-                    print("Access forbidden (403) - credentials may be valid but access denied")
-            else:
-                if verbose:
-                    print(f"Unexpected response: {response.status_code}")
+            # Make HTTP request with basic auth
+            response = requests.get(
+                target,
+                auth=(username, pwd),
+                verify=verify_ssl,
+                timeout=10,  # 10 second timeout
+                headers={'User-Agent': 'BrutePy/1.0'}
+            )
+            
+            with results_lock:
+                if found_password:
+                    return
                     
-    except requests.exceptions.ConnectionError as e:
-        with results_lock:
-            print(f"Error: Connection failed - {e}")
-            connection_failed = True
-            # If this is early in the scan, it's likely the target is unreachable
-            if line_number <= 2:
-                found_password = True  # Signal other threads to stop
-        return False
-    except requests.exceptions.Timeout:
-        if verbose:
-            print("Error: Request timed out")
-    except requests.exceptions.SSLError as e:
-        print(f"Error: SSL/TLS error - {e}")
-        if not ignoreBadCerts:
-            print("Try using --ignore-invalid-certificate flag for self-signed certificates")
-        return False
-    except Exception as e:
-        if verbose:
-            print(f"Error during request: {e}")
+                if verbose:
+                    retry_info = f" (attempt {attempt + 1}/{maxRetries + 1})" if attempt > 0 else ""
+                    print(f"Trying: {username}:[REDACTED] (line {line_number}){retry_info} -> {response.status_code}")
+                elif line_number % 10 == 0:  # Progress every 10 attempts
+                    print(f"Progress: tested {line_number} passwords...")
+                
+                if response.status_code == 200:
+                    found_password = True
+                    print(f"\n[SUCCESS] Authentication successful!")
+                    print(f"Username: {username}")
+                    print(f"Password found at line: {line_number}")
+                    if outputFile:
+                        with open(outputFile, 'a') as f:
+                            f.write(f"SUCCESS: {target} - {username}:{pwd} (line {line_number})\n")
+                    return True
+                elif response.status_code == 401:
+                    if verbose:
+                        print("Authentication failed (401 Unauthorized)")
+                    return False  # No need to retry authentication failures
+                elif response.status_code == 403:
+                    if verbose:
+                        print("Access forbidden (403) - credentials may be valid but access denied")
+                    return False  # No need to retry access forbidden
+                elif response.status_code == 429:
+                    # Handle rate limiting with retry logic
+                    if attempt < maxRetries:
+                        # Check for Retry-After header
+                        retry_after = response.headers.get('Retry-After')
+                        if retry_after:
+                            try:
+                                wait_time = float(retry_after)
+                                if verbose:
+                                    print(f"Rate limited (429). Server requests waiting {wait_time}s (Retry-After header)")
+                            except ValueError:
+                                # Retry-After might be a date, use exponential backoff instead
+                                wait_time = base_backoff * (2 ** attempt)
+                                if verbose:
+                                    print(f"Rate limited (429). Using exponential backoff: {wait_time:.1f}s")
+                        else:
+                            # Use exponential backoff: 1s, 2s, 4s
+                            wait_time = base_backoff * (2 ** attempt)
+                            if verbose:
+                                print(f"Rate limited (429). Using exponential backoff: {wait_time:.1f}s")
+                        
+                        if verbose:
+                            print(f"Retrying in {wait_time:.1f} seconds... (attempt {attempt + 1}/{maxRetries})")
+                        
+                        # Release lock during sleep to allow other threads to continue
+                        pass
+                    else:
+                        if verbose:
+                            print(f"Rate limited (429). Max retries ({maxRetries}) exceeded for line {line_number}")
+                        return False
+                else:
+                    if verbose:
+                        print(f"Unexpected response: {response.status_code}")
+                    return False  # Don't retry unexpected responses
+            
+            # If we got a 429, sleep outside the lock and retry
+            if response.status_code == 429 and attempt < maxRetries:
+                sleep(wait_time)
+                continue
+            else:
+                # Either successful response processed or non-retryable error
+                break
+                        
+        except requests.exceptions.ConnectionError as e:
+            with results_lock:
+                print(f"Error: Connection failed - {e}")
+                connection_failed = True
+                # If this is early in the scan, it's likely the target is unreachable
+                if line_number <= 2:
+                    found_password = True  # Signal other threads to stop
+            return False
+        except requests.exceptions.Timeout:
+            if verbose:
+                print("Error: Request timed out")
+            return False
+        except requests.exceptions.SSLError as e:
+            print(f"Error: SSL/TLS error - {e}")
+            if not ignoreBadCerts:
+                print("Try using --ignore-invalid-certificate flag for self-signed certificates")
+            return False
+        except Exception as e:
+            if verbose:
+                print(f"Error during request: {e}")
+            return False
     
     return False
 
@@ -188,6 +242,7 @@ print(f"Username: {username}")
 print(f"Wordlist: {wordlist}")
 print(f"Delay: {delay}ms between requests")
 print(f"Threads: {numThreads}")
+print(f"Max retries for 429 responses: {maxRetries}")
 print(f"SSL verification: {'disabled' if ignoreBadCerts else 'enabled'}")
 if startAt > 0:
     print(f"Starting at line: {startAt}")
