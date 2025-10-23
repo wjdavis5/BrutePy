@@ -1,0 +1,25 @@
+# Example wordlist for BrutePy
+# This is a very basic wordlist for testing purposes only.
+# For real penetration testing, use comprehensive wordlists like:
+# - SecLists: https://github.com/danielmiessler/SecLists
+# - RockYou: https://www.kaggle.com/datasets/wjburns/common-password-list-rockyoutxt
+# - FuzzDB: https://github.com/fuzzdb-project/fuzzdb
+
+# Common default passwords
+admin
+password
+123456
+12345678
+password123
+admin123
+root
+toor
+guest
+user
+test
+letmein
+welcome
+qwerty
+monkey
+dragon
+master
