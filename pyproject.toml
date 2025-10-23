@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brutepy"
+version = "2.1.0"
+description = "Modern HTTP Basic Authentication brute force tool for penetration testing"
+readme = "README.md"
+requires-python = ">=3.6"
+license = {text = "GPL-2.0"}
+authors = [
+    {name = "wjdavis5", email = "wjdavis5@users.noreply.github.com"}
+]
+keywords = ["security", "penetration-testing", "brute-force", "http-auth"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "requests>=2.31.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/wjdavis5/BrutePy"
+Documentation = "https://github.com/wjdavis5/BrutePy#readme"
+Repository = "https://github.com/wjdavis5/BrutePy"
+Issues = "https://github.com/wjdavis5/BrutePy/issues"
+
+[project.scripts]
+brutepy = "Brute:__main__"
+
+[tool.setuptools]
+py-modules = ["Brute", "validate"]

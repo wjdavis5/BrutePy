@@ -23,9 +23,24 @@ BrutePy is a modern, feature-rich tool for performing HTTP Basic Authentication 
 
 ## Installation
 
+### Method 1: Direct Use (Recommended)
 ```bash
 git clone https://github.com/wjdavis5/BrutePy.git
 cd BrutePy
+pip install -r requirements.txt
+```
+
+### Method 2: Package Installation
+```bash
+git clone https://github.com/wjdavis5/BrutePy.git
+cd BrutePy
+pip install -e .
+```
+
+### Quick Start
+After installation, try the example wordlist:
+```bash
+python Brute.py http://httpbin.org/basic-auth/user/pass example_wordlist.txt user --verbose
 ```
 
 ## Usage
@@ -174,6 +189,143 @@ Common wordlists for brute force attacks:
 - [SecLists](https://github.com/danielmiessler/SecLists)
 - [RockYou](https://www.kaggle.com/datasets/wjburns/common-password-list-rockyoutxt)
 - [FuzzDB](https://github.com/fuzzdb-project/fuzzdb)
+
+Example usage with included wordlist:
+```bash
+python Brute.py https://target.com/admin example_wordlist.txt admin --verbose
+```
+
+## Troubleshooting
+
+### Connection Issues
+
+**Problem**: `Connection failed` error immediately after starting
+```
+Error: Connection failed - [Errno 111] Connection refused
+```
+**Solutions**:
+- Verify the target URL is correct and accessible
+- Check if the target server is running
+- Ensure you have network connectivity to the target
+- Try testing with `curl` or a browser first
+
+**Problem**: Connection timeout
+```
+Error: Request timed out
+```
+**Solutions**:
+- Increase connection timeout (currently hardcoded to 10 seconds)
+- Check for network latency issues
+- Verify the target isn't blocking your IP
+- Consider using `--delay` to slow down requests
+
+### SSL/TLS Issues
+
+**Problem**: SSL certificate verification fails
+```
+Error: SSL/TLS error - certificate verify failed
+```
+**Solutions**:
+- Use `--ignore-invalid-certificate` flag for self-signed certificates
+- Update your system's CA certificates
+- Only bypass SSL verification for testing environments you control
+
+### Rate Limiting
+
+**Problem**: Getting 429 responses
+```
+Rate limited (429). Using exponential backoff
+```
+**Solutions**:
+- Increase `--delay` value (e.g., `--delay 2000` for 2 seconds)
+- Reduce `--threads` count (e.g., `--threads 1`)
+- Increase `--max-retries` value (e.g., `--max-retries 5`)
+- The tool automatically handles 429 with exponential backoff
+
+### Performance Issues
+
+**Problem**: Scan is too slow
+**Solutions**:
+- Increase thread count: `--threads 10`
+- Decrease delay: `--delay 10`
+- Use a smaller, targeted wordlist
+- Ensure good network connectivity
+
+**Problem**: Scan is too fast / getting blocked
+**Solutions**:
+- Decrease thread count: `--threads 1`
+- Increase delay: `--delay 1000`
+- Use `--max-retries` to handle rate limiting better
+
+### Wordlist Issues
+
+**Problem**: `Wordlist file not found`
+**Solutions**:
+- Check file path is correct
+- Use absolute path instead of relative
+- Verify file permissions are readable
+- Check for typos in filename
+
+**Problem**: Scan ends too quickly with empty wordlist
+**Solutions**:
+- Verify wordlist file has content
+- Check for encoding issues (should be UTF-8)
+- Ensure wordlist has one password per line
+- Try the included `example_wordlist.txt`
+
+### Authentication Issues
+
+**Problem**: No success but credentials are correct
+**Solutions**:
+- Verify the authentication type is Basic Auth
+- Check if the endpoint requires different credentials format
+- Test credentials manually with browser or curl
+- Verify URL points to correct authentication endpoint
+
+**Problem**: Success but shows wrong credentials
+**Solutions**:
+- This shouldn't happen - please file a bug report
+- Verify with manual test using the credentials shown
+- Check output file with `--output` for details
+
+### Python/Dependency Issues
+
+**Problem**: `ModuleNotFoundError: No module named 'requests'`
+**Solutions**:
+```bash
+pip install -r requirements.txt
+# or
+pip install requests>=2.31.0
+```
+
+**Problem**: Python 2 syntax errors
+**Solutions**:
+- Use Python 3.6 or later
+- Check Python version: `python --version`
+- Use `python3` explicitly if needed
+
+### General Tips
+
+- **Start with verbose mode** (`--verbose`) to see what's happening
+- **Test with small wordlists first** to verify everything works
+- **Use the example wordlist** to confirm setup is correct
+- **Check logs** with `--output` flag to review all attempts
+- **Monitor target system** logs to understand response patterns
+- **Respect rate limits** to avoid being blocked or causing issues
+- **Use appropriate delays** based on target system capacity
+
+### Getting Help
+
+If you encounter issues not covered here:
+1. Check existing [GitHub Issues](https://github.com/wjdavis5/BrutePy/issues)
+2. Review the [SECURITY.md](SECURITY.md) for security-related questions
+3. Read [CONTRIBUTING.md](CONTRIBUTING.md) for development help
+4. Create a new issue with:
+   - Python version (`python --version`)
+   - Operating system
+   - Command used (redact sensitive info)
+   - Error message (full output)
+   - Expected vs actual behavior
 
 ## Legal Disclaimer
 
